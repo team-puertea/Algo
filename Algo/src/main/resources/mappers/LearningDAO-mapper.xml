@@ -521,7 +521,7 @@
 		    UNIT_NUM = #{unitNum}, 
 		    TITLE = #{title}, 
 		    CONTENT =#{content}, 
-		    CORRECT_ANSWER = #{correctAnswer}, 
+		    CORRECT_ANSWER = #{correctAnswer,jdbcType=VARCHAR}, 
 		    SOLUTION = #{solution},
 		    UPDATED_AT = SYSTIMESTAMP
 		WHERE QUIZ_NUM = #{quizNum}

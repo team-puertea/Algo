@@ -33,7 +33,19 @@ e=>{
 	}
 	const saveQuizContentBtn = document.getElementById('btn-save-quiz-content'); //
 	if(saveQuizContentBtn){
-		
+		saveQuizContentBtn.addEventListener('click',e=>{
+			const quizNum = saveQuizContentBtn.getAttribute('data-num');
+			const quizContent = document.getElementById('quiz-content');
+			const xhr = new XMLHttpRequest();
+			xhr.open('PUT',`${contextPath}/content/learning/quiz/${quizNum}`);     
+			xhr.addEventListener('load',e=>{
+				// 리스트 갱신
+				console.log(e.target.response);
+			});			
+			xhr.setRequestHeader('Content-Type',"application/json;charset=UTF-8");
+			xhr.send(JSON.stringify({"content":quizContent.value}));
+			
+		})
 	} 
 	const answerList = document.getElementById('answer-list');
 	if(answerList){
@@ -135,7 +147,8 @@ function updateQuizContent(contentEle,quizNum){
 				// 퀴즈번호  저장
 				saveQuizContentBtn.setAttribute("data-num",data.quizNum);  
 				addAnswerBtn.setAttribute("data-num",data.quizNum); 
-				contentEle.innerHTML = data.content;
+//				contentEle.innerHTML = data.content;
+				contentEle.value = data.content;
 			}
 	);
 	try{
