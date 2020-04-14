@@ -12,17 +12,57 @@
 	<!-- Enables the Spring MVC @Controller programming model -->
 	<annotation-driven />
 
+	<!-- 정적페이지 매핑경로설정 -->
 	<!-- Handles HTTP GET requests for /resources/** by efficiently serving up static resources in the ${webappRoot}/resources directory -->
 	<resources mapping="/resources/**" location="/resources/" />
 
+<!-- 웹 컴포넌트 라이브러리 url매핑  -->
+	<resources mapping="/webjars/**" location="classpath:/META-INF/resources/webjars/" />
+	
 	<!-- Resolves views selected for rendering by @Controllers to .jsp resources in the /WEB-INF/views directory -->
 	<beans:bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
 		<beans:property name="prefix" value="/WEB-INF/views/" />
 		<beans:property name="suffix" value=".jsp" />
 	</beans:bean>
 	
-	<context:component-scan base-package="com.puretea.algo" />
+		<!-- 파일 업로드 -->
+	<beans:bean id="multipartResolver"
+							class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<!-- 파일당 업로드 제한 용량설정 10MB 1024*1024*10,  1kb = 1024byte, 1mb = 1024kbyte-->
+		<beans:property name="maxUploadSize" value="10485760"/>
+		<beans:property name="defaultEncoding" value="utf-8" />
+	</beans:bean>
 	
-	
-	
+		<!-- component : @Controller, @Service, @Repository 중에서
+	                 @Controller가 있는 클래스만 인스턴스화 하도록 설정함 -->
+	<context:component-scan base-package="com.puercha.algo" 
+													use-default-filters="false">
+		<context:include-filter type="annotation" 
+		                        expression="org.springframework.stereotype.Controller"/>
+		<context:include-filter type="annotation" 
+		                        expression="org.springframework.web.bind.annotation.ControllerAdvice"/>                        												
+	</context:component-scan>
+	<!-- interceptor 설정 -->	
+	<interceptors>
+		<!-- 로그인 세션 확인 -->
+		<interceptor>
+			<!-- 1)특정 URL지정 -->
+<!-- 			<mapping path="/board/**/"/> -->
+			<mapping path="/board/**"/>
+			<mapping path="/challenge/**/"/>
+			<mapping path="/learning/**/"/>
+			<mapping path="/content/**"/>
+			<mapping path="/admin/**"/>
+			<mapping path="/user/**"/>
+			<exclude-mapping path="/board/list/**"/>
+			<exclude-mapping path="/board/post/**"/>
+			<exclude-mapping path="/learning/subject/**"/>
+			<exclude-mapping path="/challenge/list/**"/>
+			<exclude-mapping path="/learning/list/**"/>
+			<exclude-mapping path="/user/sign*"/>			
+			<!-- 2)빈 등록 -->
+			<beans:bean id="loginInterceptor" 
+									class="com.puercha.algo.interceptor.LoginInterceptor" />
+		</interceptor>	
+	</interceptors>
 </beans:beans>

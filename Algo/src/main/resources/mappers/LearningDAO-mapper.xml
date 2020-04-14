@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="mappers.learningDAO-mapper">
+	<!-- 과목생성하기 -->
+	<insert id="insertSubject" parameterType="SubjectVO">
+		INSERT INTO Subject (
+		    subject_num, 
+		    title, 
+		    user_num, 
+		    image_data, 
+		    image_size, 
+		    image_type, 
+		    image_name)
+		VALUES
+		    (SUBJECT_NUM_SEQ.nextval,
+		    #{title},
+		    #{userNum},
+		    #{imageData,jdbcType=BLOB},
+		    #{imageSize,jdbcType=NUMERIC},
+		    #{imageType,jdbcType=VARCHAR},
+		    #{imageName,jdbcType=VARCHAR})
+		<selectKey order="AFTER" keyProperty="subjectNum" resultType="long">
+			SELECT SUBJECT_NUM_SEQ.currval FROM dual
+		</selectKey>	
+	</insert>
+	
+	<!-- 단원 생성하기 -->
+	<insert id="insertUnit" parameterType="UnitVO">		
+		INSERT INTO Unit (
+		    UNIT_NUM, 
+		    SUBJECT_NUM, 
+		    CONTENT, 
+		    TITLE, 
+		    CHAPTER_DEPTH
+		    )
+		VALUES (
+		    UNIT_NUM_SEQ.nextval,
+		    #{subjectNum},
+		    #{content},
+		    #{title},
+		    #{chapterDepth}
+		)
+		<selectKey keyProperty="unitNum" resultType="long" order="AFTER">
+			SELECT UNIT_NUM_SEQ.currval FROM dual
+		</selectKey>
+	</insert>
+	<!-- 단원완료 생성 -->
+	<insert id="insertUnitCompletion">
+		INSERT INTO unit_completion( 
+			COM_NUM, 
+			USER_NUM, 
+			UNIT_NUM, 
+			STATUS
+			)
+			VALUES (
+			    COM_NUM_SEQ.nextval,
+			    #{userNum},
+			    #{unitNum},
+			    #{status}
+			)
+		<selectKey keyProperty="comNum" order="AFTER" resultType="long">
+			SELECT COM_NUM_SEQ.currval FROM dual
+		</selectKey>				
+	</insert>
+	
+	
+	<!-- 새로운 마무리문제 생성 -->
+	<insert id="insertQuiz" parameterType="QuizVO">
+		INSERT INTO Quiz (
+		    QUIZ_NUM, 
+		    UNIT_NUM, 
+		    TITLE, 
+		    CONTENT, 
+		    CORRECT_ANSWER, 
+		    SOLUTION, 
+		    USER_NUM
+		    )
+		VALUES (
+		    QUIZ_NUM_SEQ.nextval,
+		    #{unitNum},
+		    #{title},
+		    #{content},
+		    #{correctAnswer,jdbcType=VARCHAR},
+		    #{solution,jdbcType=VARCHAR},
+		    #{userNum}
+		)
+		<selectKey order="AFTER" keyProperty="quizNum" resultType="long">
+			SELECT QUIZ_NUM_SEQ.currval FROM Dual
+		</selectKey>
+	</insert>
+
+	<!-- 새로운 답안 생성 -->
+	<insert id="insertAnswer" parameterType="QuizAnswerVO" >
+		INSERT INTO Quiz_answer (
+		    ANSWER_NUM, 
+		    QUIZ_NUM, 
+		    CONTENT, 
+		    IS_CORRECT
+		) VALUES (
+		    ANSWER_NUM_SEQ.nextval,
+		    #{quizNum},
+		    #{content},
+		    #{correctAsString}
+		)
+		<selectKey resultType="long" order="AFTER" keyProperty="answerNum">
+			SELECT ANSWER_NUM_SEQ.currval FROM dual
+		</selectKey>
+	</insert>
+	<!-- 마무리문제 결과 생성 -->
+	<insert id="insertQuisResult" parameterType="QuizResultVO">
+	INSERT INTO quiz_result(
+		RESULT_NUM, 
+		QUIZ_NUM, 
+		ANSWER, 
+		user_num,
+		STATUS
+		) values (
+		    RESULT_NUM_SEQ.nextval,
+		    #{quizNum},
+		    #{answer},
+		    #{userNum},
+		    #{status}    
+		)
+		<selectKey keyProperty="resultNum" order="AFTER" resultType="long">
+			SELECT RESULT_NUM_SEQ.currval FROM dual
+		</selectKey>
+	</insert>
+	<!-- 과목목록 -->
+	<!-- 1/전체목록 -->
+	<!-- 진척도도 조회함 -->
+	<select id="selectSubjectList" resultType="SubjectVO" parameterType="hashmap">
+		select
+		*
+		FROM(
+		select row_number() over(order by
+		subject.subject_num desc) as
+		num,
+		<if test="userNum != null and userNum > 0">
+			progress."progressRate",
+		</if>
+		subject.subject_num as "subjectNum",
+		title,
+		subject.created_at  as "createdAt",
+		subject.updated_at as "updatedAt",
+		subject.user_num as "userNum",
+		app_user.username AS "username"
+<!-- 		image_data as "imageData" -->
+		FROM subject, app_user 
+		<if test="userNum != null and userNum > 0">
+			,(SELECT subject.subject_num, count(distinct unit.unit_num), 
+			count(distinct case when unit_completion.status='C' AND unit_completion.user_num = #{userNum} then unit_completion.unit_num else null end),
+	CASE WHEN count(distinct unit.unit_num) <![CDATA[ <> ]]> 0 THEN
+	count(distinct case when unit_completion.status='C' 
+		AND unit_completion.user_num = #{userNum} 
+		then unit_completion.unit_num else null end)/ count(distinct unit.unit_num) *100 ELSE 0 END AS "progressRate"
+	FROM  subject, unit, unit_completion
+	WHERE subject.subject_num = unit.subject_num (+)
+	AND  unit.unit_num = unit_completion.unit_num(+)
+	GROUP BY subject.subject_num) progress
+		</if>
+		where subject.user_num = app_user.user_num
+		<if test="searchType != null and keywords != null">
+			<foreach item="keyword" collection="keywords" open="and ("
+				separator="or" close=")">
+				<choose>
+					<!-- 제목 -->
+					<when test="searchType == 'T'.toString()">
+						title like '%'||#{keyword}||'%'
+					</when>
+					<!-- 작성자 -->
+					<when test="searchType == 'N'toString()">
+						userNum like '%'||#{keyword}||'%'
+					</when>
+					<otherwise>
+						title like '%'||#{keyword}||'%' or userNum like
+						'%'||#{keyword}||'%'
+					</otherwise>
+				</choose>
+			</foreach>
+		</if>
+		<if test="userNum != null and userNum > 0">
+			and progress.subject_num = subject.subject_num(+)
+		</if>
+			order by title asc
+		)
+	</select>
+	
+	<!-- 사용자가 작성한 모든과목들가져오기 -->
+	<select id="selectAllUserSubjects" parameterType="hashmap" resultType="SubjectVO">
+		select	*
+		FROM(
+			select row_number() over(order by subject_num desc) as	num,
+			subject_num as "subjectNum",
+			title,
+			created_at as "createdAt",
+			updated_at as "updatedAt",
+			user_num as "userNum"
+			FROM subject
+			where user_num = #{userNum}
+			<if test="searchType != null and keywords != null">
+				<foreach item="keyword" collection="keywords" open="AND ("
+					separator="or" close=")">
+					<choose>
+						<!-- 제목 -->
+						<when test="searchType == 'T'.toString()">
+							title like '%'||#{keyword}||'%'
+						</when>
+						<!-- 작성자 -->
+						<when test="searchType == 'N'toString()">
+							userNum like '%'||#{keyword}||'%'
+						</when>
+						<otherwise>
+							title like '%'||#{keyword}||'%' or userNum like
+							'%'||#{keyword}||'%'
+						</otherwise>
+					</choose>
+				</foreach>
+			</if>
+			)
+		<if test="startRowNum != null and endRowNum != null">
+			WHERE num between #{startRowNum} and #{endRowNum}
+		</if>
+	</select>
+
+	<!-- 총 레코드 수 -->
+	<select id="countTotalRecord" parameterType="map"
+		resultType="int">
+		select count(subject.subject_num) as countTotal
+		from subject
+		<if test="searchType !=null and keywords !=null">
+			where
+			<foreach item="keyword" collection="keywords" open="("
+				separator="or" close=")">
+				<choose>
+					<!-- 제목 -->
+					<when test="searchType == 'T'.toString()">
+						title like '%'||#{keyword}||'%'
+					</when>
+					<!-- 작성자 -->
+					<when test="searchType == 'N'.toString()">
+						userNum like '%'||#{keyword}||'%'
+					</when>
+					<otherwise>
+						title like '%'||#{keyword}||'%' or userNum like
+						'%'||#{keyword}||'%'
+					</otherwise>
+				</choose>
+			</foreach>
+		</if>
+
+
+
+
+	</select>
+<!-- 단원의 리스트를 불러온다 -->
+	<select id="selectUnitList" parameterType="hashmap" resultType="UnitVO">
+		select
+		Unit_num as
+		"unitNum",
+		subject_num as "subjectNum",
+		content,
+		title,
+		chapter_depth as
+		"chapterDepth",
+		created_at as "createdAt",
+		updated_at as "updatedAt"
+		from unit where subject_num like #{subjectNum}
+<!-- 		order by "unitNum" asc -->
+		ORDER BY chapter_depth ASC
+
+	</select>
+	
+	<!-- 내용을 제외한 unit의 데이터들의 리스트를 가져옴 -->
+	<select id="selectAllUnitMetadatas" parameterType="hashmap" resultType="UnitVO">
+		SELECT
+		unit.unit_num as "unitNum",
+		unit.subject_num as "subjectNum",
+		unit.title,
+		unit.chapter_depth as "chapterDepth",
+		<if test="userNum != null and userNum > 0">
+			"passesUnit",
+			"totalQuiz", 
+			"passedQuiz",
+		</if>
+		unit.created_at as "createdAt",
+		unit.updated_at as "updatedAt"
+		FROM unit
+			<if test="userNum != null and userNum > 0">
+			,(
+				SELECT CASE WHEN "totalQuiz" = "passedQuiz" THEN 'T' ELSE 'F' END AS "passesUnit", "quizStatus".*
+				FROM (
+				SELECT unit.unit_num AS "unitNum", count(distinct quiz.quiz_num) AS "totalQuiz",  
+				count(DISTINCT case when quiz_result.status='t' and quiz_result.user_num = #{userNum}  then quiz.quiz_num else null end) AS "passedQuiz"
+				FROM UNIT, QUIZ, quiz_result
+				WHERE UNIT.unit_num = quiz.unit_num(+)
+				AND quiz.quiz_num = quiz_result.quiz_num (+)
+				GROUP BY unit.unit_num , unit.title
+				) "quizStatus"
+			) "unitProgress"
+			</if> 
+		WHERE subject_num = #{subjectNum}
+		<if test="userNum != null and userNum > 0">
+			AND unit.unit_num = "unitProgress"."unitNum"
+		</if>
+		ORDER BY chapter_depth ASC
+	</select>
+
+	<select id="selectOneUnit" resultType="UnitVO">
+		SELECT
+		unit.Unit_num as	"unitNum",
+		unit.subject_num as "subjectNum",
+		unit.content,
+		unit.title,
+		unit.chapter_depth as "chapterDepth",
+		<if test="userNum != null and userNum > 0">
+			"passesUnit",
+			"totalQuiz", 
+			"passedQuiz",
+		</if>
+		unit.created_at as "createdAt",
+		unit.updated_at as "updatedAt"
+		FROM unit
+		<if test="userNum != null and userNum > 0">
+			,(
+				SELECT CASE WHEN "totalQuiz" = "passedQuiz" THEN 'T' ELSE 'F' END AS "passesUnit", "quizStatus".*
+				FROM (
+				SELECT unit.unit_num AS "unitNum", count(distinct quiz.quiz_num) AS "totalQuiz",  
+				count(DISTINCT case when quiz_result.status='t' and quiz_result.user_num = #{userNum}  then quiz.quiz_num else null end) AS "passedQuiz"
+				FROM UNIT, QUIZ, quiz_result
+				WHERE UNIT.unit_num = quiz.unit_num(+)
+				AND quiz.quiz_num = quiz_result.quiz_num (+)
+				AND UNIT.unit_num = #{unitNum}
+				GROUP BY unit.unit_num , unit.title
+				) "quizStatus"
+			) "unitProgress"
+			</if> 		 
+		where unit_num = #{unitNum}
+		<if test="userNum != null and userNum > 0">
+			AND unit.unit_num = "unitProgress"."unitNum"
+		</if>
+
+	</select>
+
+	<!-- 과목 하나 불러오기 -->
+	<select id="selectOneSubject" parameterType="long" resultType="SubjectVO">
+		SELECT 
+		    subject_num AS "subjectNum",
+		    title AS "title",
+		    user_num AS "userNum",
+		    created_at AS "createdAt",
+		    updated_at AS "updatedAt",
+		    image_data AS "imageData",
+		    image_size AS "imageSize",
+		    image_type AS "imageType",
+		    image_name AS "imageName"
+		FROM Subject
+		WHERE subject_num = #{subjectNum}
+	</select>
+
+	<!-- 마무리문제 불러오기 -->
+	<!-- <select id="selectQuizList" resultType="QuizVO"> select quiz_num as 
+		"quizNum", unit_num as "unitNum", title, content, correct_answer as "correcAnswer", 
+		solution, created_at as "createdAt", updated_at as "updatedAt", user_num 
+		as "userNum" from quiz where unit_num like #{unitNum} </select> -->
+
+	<!-- 마무리문제 답안지 불러오기 -->
+	
+	<select id="selectQuizList" resultType="QuizVO" resultMap="QuizVOMap">
+
+		select
+		t1.quiz_num as "quizNum",
+		t1.unit_num as "unitNum",
+		t1.title,
+		t1.content,
+		t1.correct_answer as
+		"correctAnswer",
+		t1.solution,
+
+		t1.user_num as "userNum",
+		t2.answer_num as "answer.answerNum",
+		t2.quiz_num as "answer.quizNum",
+		t2.is_correct as "answer.isCorrect",
+		t2.content as "answer.content"
+		from quiz t1 left
+		join quiz_answer t2
+		on t1.quiz_num = t2.quiz_num
+<!-- 		where t1.unit_num like 	#{unitNum} -->
+		where t1.unit_num =	#{unitNum}
+		order by t1.quiz_num asc, answer_num asc
+	</select>
+	
+	<resultMap type="QuizAnswerVO" id="QuizAnswerVO">
+		<!-- <id property="answerNum" column="answerNum" /> -->
+		<result column="answer.answerNum" property="answerNum" />
+		<result column="answer.content" property="content" />
+		<result column="answer.quizNum" property="quizNum" />
+		
+
+
+	</resultMap>
+	<resultMap type="QuizVO" id="QuizVOMap">
+		<result column="quizNum" property="quizNum" />
+		<result column="title" property="title" />
+		<result column="content" property="content" />
+		<result column="correctAnswer" property="correctAnswer" />
+		<result column="userNum" property="userNum" />
+		<collection property="answerList" resultMap="QuizAnswerVO" />
+	</resultMap>
+
+	<!-- 한 개의 마무리문제를 열람 -->
+	<select id="selectOneQuiz" parameterType="long" resultType="QuizVO">
+		SELECT 
+		    QUIZ_NUM AS "quizNum", 
+		    UNIT_NUM AS "unitNum", 
+		    TITLE AS "title", 
+		    CONTENT AS "content", 
+		    CORRECT_ANSWER AS "correctAnswer", 
+		    SOLUTION AS "solution", 
+		    CREATED_AT AS "createdAt", 
+		    UPDATED_AT AS "updatedAt",
+		    USER_NUM AS "userNum"
+		FROM Quiz
+		WHERE quiz_num =#{quizNum}
+	</select>
+	
+<!-- 퀴즈(마무리문제) 답안	 -->
+	<select id="selectAnswerList" parameterType="long" resultType="QuizAnswerVO">
+		SELECT 
+		    ANSWER_NUM AS "answerNum", 
+		    QUIZ_NUM AS "quizNum", 
+		    CONTENT AS "content", 
+		    IS_CORRECT AS "correctFromString", 
+		    CREATED_AT AS "createdAt", 
+		    UPDATED_AT AS "updatedAt"
+		FROM Quiz_answer
+		WHERE quiz_num = #{quizNum}
+	</select>
+	<!-- 답안 한개 조회	 -->
+	<select id="selectOneAnswer" parameterType="long" resultType="QuizAnswerVO">
+		SELECT 
+		    ANSWER_NUM AS "answerNum", 
+		    QUIZ_NUM AS "quizNum", 
+		    CONTENT AS "content", 
+		    IS_CORRECT AS "correctFromString", 
+		    CREATED_AT AS "createdAt", 
+		    UPDATED_AT AS "updatedAt"
+		FROM Quiz_answer
+		WHERE ANSWER_NUM = #{answerNum}
+	</select>
+	
+	<!-- 단원의 진행정도를 조회	 -->
+	<select id="selectUnitProgress" resultType="hashmap" parameterType="hashmap">
+	SELECT CASE WHEN "totalQuiz" = "passedQuiz" THEN 'T' ELSE 'F' END AS "passesUnit", "quizStatus".*
+	FROM (
+		SELECT 
+		unit.unit_num AS "unitNum", 
+		count(distinct quiz.quiz_num) AS "totalQuiz",  
+		count(DISTINCT case when quiz_result.status='t' and quiz_result.user_num = #{userNum}  then quiz.quiz_num else null end) AS "passedQuiz"
+		FROM UNIT, QUIZ, quiz_result
+		WHERE UNIT.unit_num = quiz.unit_num(+)
+		AND quiz.quiz_num = quiz_result.quiz_num (+)
+		AND unit.unit_num = #{unitNum}
+		GROUP BY unit.unit_num
+	) "quizStatus"
+	</select>
+	
+	<!-- 문제 별 통과여부 조회 -->
+	<select id="selectAllPassFailOfQuiz" resultType="hashmap" parameterType="hashmap">
+		SELECT CASE WHEN "passedResult" > 0 THEN 'T' ELSE 'F' END AS "passesQuiz", "quizStatus".*
+		FROM (
+			SELECT distinct unit.unit_num AS "unitNum", quiz.quiz_num AS "quizNum", count( case when quiz_result.status='t' and quiz_result.user_num =#{userNum}  then quiz.quiz_num else null end )AS "passedResult"
+			FROM UNIT, QUIZ, quiz_result
+			WHERE UNIT.unit_num = quiz.unit_num
+			AND quiz.quiz_num = quiz_result.quiz_num (+)
+			AND unit.unit_num = #{unitNum}
+			GROUP BY unit.unit_num, quiz.quiz_num
+			order by quiz.quiz_num
+		)"quizStatus"
+	</select>
+	
+	
+<!-- 다음 unit번호 가져오기	 -->
+	<select id="getNextUnitNum" resultType="long" parameterType="long">
+		SELECT  nvl(min(unit_num),0 )as "unitNum" 
+		FROM unit 
+		WHERE unit_num > #{unitNum}
+		and subject_num = (SELECT subject_num 
+		FROM unit WHERE unit_num = #{unitNum}) 	
+	</select>
+	
+	
+<!--  Update  -->
+	<!-- 과목 내용 변경 -->
+	<update id="updateSubject" parameterType="SubjectVO">
+		UPDATE subject
+		SET
+		    title= #{title}, 
+		    user_num = #{userNum}, 
+		    updated_at = SYSTIMESTAMP,
+		    IMAGE_DATA = #{imageData, jdbcType=BLOB}, 
+		    IMAGE_SIZE = #{imageSize, jdbcType=NUMERIC}, 
+		    IMAGE_TYPE = #{imageType, jdbcType=VARCHAR}, 
+		    IMAGE_NAME = #{imageName, jdbcType=VARCHAR}
+		WHERE subject_num = #{subjectNum}	
+	</update>
+	<!-- 단원 내용 편집 -->
+	<update id="updateUnit" parameterType="UnitVO">
+		UPDATE Unit
+		SET      
+		    SUBJECT_NUM = #{subjectNum}, 
+		    content = #{content,jdbcType=VARCHAR}, 
+		    TITLE = #{title}, 
+		    CHAPTER_DEPTH = #{chapterDepth,jdbcType=VARCHAR},
+		    UPDATED_AT = SYSTIMESTAMP
+		WHERE UNIT_NUM = #{unitNum}	
+	</update>
+	<!-- 마무리문제 내용 편집	 -->
+	<update id="updateQuiz" parameterType="QuizVO">
+		UPDATE Quiz 
+		SET
+		    UNIT_NUM = #{unitNum}, 
+		    TITLE = #{title}, 
+		    CONTENT =#{content}, 
+		    CORRECT_ANSWER = #{correctAnswer,jdbcType=VARCHAR}, 
+		    SOLUTION = #{solution},
+		    UPDATED_AT = SYSTIMESTAMP
+		WHERE QUIZ_NUM = #{quizNum}
+	</update>
+	<!-- 마무리문제 답안 수정 -->
+	<update id="updateAnswer" parameterType="QuizAnswerVO">
+		UPDATE Quiz_answer
+		SET   
+		    QUIZ_NUM = #{quizNum}, 
+		    CONTENT = #{content}, 
+		    IS_CORRECT = #{correctAsString}, 
+		    UPDATED_AT = SYSTIMESTAMP
+		WHERE ANSWER_NUM = #{answerNum}
+	</update>
+
+
+<!-- Delete -->
+	<!-- 과목 삭제 -->
+	<delete id="deleteSubject" parameterType="long">
+		DELETE FROM Subject
+		WHERE subject_num = #{subjectNum}
+	</delete>
+	<!-- 단원 삭제 -->
+	<delete id="deleteUnit" parameterType="long" >
+		DELETE FROM unit 
+		WHERE unit_num = #{unitNum}
+	</delete>
+	<!-- 마무리문제 삭제 -->
+	<delete id="deleteQuiz" parameterType="long">
+		DELETE FROM Quiz
+		WHERE quiz_num = #{quizNum} 
+	</delete>
+	<!-- 마무리문제 답안 삭제	 -->
+	<delete id="deleteAnswer" parameterType="long">
+		DELETE FROM QUIZ_ANSWER
+		WHERE answer_num = #{answerNum}
+	</delete>
+
+
+
+
+
+
+
+
+
+
+
+
+
+</mapper>
